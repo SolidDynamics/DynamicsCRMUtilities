@@ -16,7 +16,7 @@ namespace FluidDynamics
 	{
 		string EnvironmentName { get; }
 		List<Entity> RetrieveAllRecords(string fetchXML);
-		OneToManyRelationshipMetadata[] GetOneToManyRelationships(string entityName);
+		IEnumerable<OneToManyRelationshipMetadata> GetOneToManyRelationships(string entityName);
 	}
 
 	public class ExtendedOrganizationService : IExtendedOrganizationService
@@ -209,7 +209,7 @@ namespace FluidDynamics
 			return entities;
 		}
 
-		public OneToManyRelationshipMetadata[] GetOneToManyRelationships(string entityName)
+		public IEnumerable<OneToManyRelationshipMetadata> GetOneToManyRelationships(string entityName)
 		{
 			List<RelationshipMetadataBase> relationshipMetadata = new List<RelationshipMetadataBase>();
 
@@ -220,8 +220,7 @@ namespace FluidDynamics
 			};
 
 			var entityrelationships = (RetrieveEntityResponse)_crmService.Execute(retrieveEntityRequest);
-			var currentEntity = entityrelationships.EntityMetadata;
-			return currentEntity.OneToManyRelationships;
+			return entityrelationships.EntityMetadata.OneToManyRelationships;
 		}
 	}
 }

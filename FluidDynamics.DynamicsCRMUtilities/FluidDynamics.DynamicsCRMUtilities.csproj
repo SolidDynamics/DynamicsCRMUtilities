@@ -2,6 +2,14 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Authors>Andrew Gallery</Authors>
+    <Company>FluidDynamics</Company>
+    <Description>A set of utilities to aid developments in delivering Dynamics 365 Customer Engagement (CE / CRM) solutions.</Description>
+    <PackageProjectUrl></PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SolidDynamics/DynamicsCRMUtilities</RepositoryUrl>
+    <PackageTags>microsoft, dynamics, crm, 365, customer engagement, utilities, developer, development</PackageTags>
+    <PackageLicenseUrl>https://licenses.nuget.org/MIT</PackageLicenseUrl>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -9,6 +17,10 @@
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.5" />
     <PackageReference Include="Microsoft.CrmSdk.XrmTooling.CoreAssembly" Version="9.0.2.7" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="CascadeDelete\" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,6 @@
-﻿using Microsoft.Xrm.Sdk;
+﻿using log4net;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
 using System;
@@ -34,33 +36,34 @@ namespace FluidDynamics.CascadeDelete
 					}
 				}
 
-				foreach (var recordId in batch)
+				var executeMultipleRequest = new ExecuteMultipleRequest()
 				{
-					_crmService.Delete(entityName, recordId);
+					Requests = new OrganizationRequestCollection()
+				};
+				foreach(var id in batch)
+				{
+					executeMultipleRequest.Requests.Add(new DeleteRequest() { Target = new EntityReference(entityName, id) });
 				}
-			}
+
+				_crmService.Execute(executeMultipleRequest);
+			}	
 		}
 
 
 		private IEnumerable<Guid> GetDependentRecords(RestrictDeleteDependency restrictDeleteDependency, IEnumerable<Guid> requiredRecordIds)
 		{
-			var queryFilter = new FilterExpression();
-			queryFilter.Conditions.Add(
-				new ConditionExpression(
-					restrictDeleteDependency.DependentEntityLookupField,
-					ConditionOperator.In,
-					requiredRecordIds.Select(i => new EntityReference(restrictDeleteDependency.RequiredEntity, i)
-					)
-				)
-			);
-
-			var query = new QueryExpression(restrictDeleteDependency.DependentEntity)
-			{
-				ColumnSet = new ColumnSet(new[] { restrictDeleteDependency.DependentEntity + "id" }),
-				Criteria = queryFilter
-			};
-
-			return _crmService.RetrieveMultiple(query).Entities.Select(e => e.Id);
+			var query = "<fetch {0}" +
+				$@"<entity name='{restrictDeleteDependency.DependentEntity}'>
+					<attribute name='{restrictDeleteDependency.DependentEntity}id' />
+					<filter>
+						<condition attribute='{restrictDeleteDependency.DependentEntityLookupField}' operator='in'>
+							{string.Join(string.Empty, requiredRecordIds.Select(id => $"<value>{id}</value")) }
+						</condition>
+					</filter>
+				</entity>
+				</fetch>";
+			
+			return _crmService.RetrieveAllRecords(query).Select(e => e.Id);
 		}
 
 		private IEnumerable<RestrictDeleteDependency> GetRestrictDeleteRelationships(string entityName)
