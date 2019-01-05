@@ -6,6 +6,7 @@ using Microsoft.Xrm.Sdk.Metadata;
 using Moq;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace FluidDynamics.DynamicsCRMUtilities.Tests
 {
@@ -27,33 +28,46 @@ namespace FluidDynamics.DynamicsCRMUtilities.Tests
 		{
 			var mockOrganizationService = new Mock<IExtendedOrganizationService>(MockBehavior.Strict);
 			mockOrganizationService.Setup(o => o.GetOneToManyRelationships(entityName)).Returns(new OneToManyRelationshipMetadata[] { }).Verifiable();
-			mockOrganizationService.Setup(o => o.Execute(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 3))).Returns(new ExecuteMultipleResponse()).Verifiable();
 
-			CascadeDeleter cascadeDeleter = new CascadeDeleter(mockOrganizationService.Object);
-			cascadeDeleter.CascadeDeleteRecords(entityName, RecordsToDelete);
+			var executeMultipleResponse = GetExecuteMultipleResponseAdapter(RecordsToDelete);
+
+			mockOrganizationService.Setup(o => o.ExecuteMultipleReturnAdapter(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 3)))
+				.Returns(executeMultipleResponse.Object)
+				.Verifiable();
+
+			var cascadeDeleter = new CascadeDeleter(mockOrganizationService.Object);
+			var results = cascadeDeleter.CascadeDeleteRecords(entityName, RecordsToDelete);
 
 			mockOrganizationService.Verify();
+
+			Assert.IsTrue(RecordsToDelete.SequenceEqual(results.Select(r => new Guid(r.RecordID))));
 		}
 
 		[TestMethod]
 		public void CascadeDeleteWithNoDependencies_DeletesRecordsInBatches()
 		{
 			var mockOrganizationService = new Mock<IExtendedOrganizationService>(MockBehavior.Strict);
-		
-			mockOrganizationService.Setup(o => o.GetOneToManyRelationships(entityName)).Returns(new OneToManyRelationshipMetadata[] { }).Verifiable();
-			mockOrganizationService.Setup(o => o.Execute(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 2))).Returns(new ExecuteMultipleResponse()).Verifiable();
-			mockOrganizationService.Setup(o => o.Execute(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 1))).Returns(new ExecuteMultipleResponse()).Verifiable();
 
-			CascadeDeleter cascadeDeleter = new CascadeDeleter(mockOrganizationService.Object)
+			mockOrganizationService.Setup(o => o.GetOneToManyRelationships(entityName)).Returns(new OneToManyRelationshipMetadata[] { }).Verifiable();
+
+			var firstBatchResponse = GetExecuteMultipleResponseAdapter(RecordsToDelete.Take(2));
+			var secondBatchResponse = GetExecuteMultipleResponseAdapter(RecordsToDelete.Skip(2));
+
+			mockOrganizationService.Setup(o => o.ExecuteMultipleReturnAdapter(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 2))).Returns(firstBatchResponse.Object).Verifiable();
+			mockOrganizationService.Setup(o => o.ExecuteMultipleReturnAdapter(It.Is<ExecuteMultipleRequest>(r => r.Requests.Count == 1))).Returns(secondBatchResponse.Object).Verifiable();
+
+			var cascadeDeleter = new CascadeDeleter(mockOrganizationService.Object)
 			{
 				BatchSize = 2
 			};
 
-			cascadeDeleter.CascadeDeleteRecords(entityName, RecordsToDelete);
+			var results = cascadeDeleter.CascadeDeleteRecords(entityName, RecordsToDelete);
 
 			mockOrganizationService.Verify();
+			Assert.IsTrue(RecordsToDelete.SequenceEqual(results.Select(r => new Guid(r.RecordID))));
 		}
 
+	
 		[TestMethod]
 		public void WithRestrictDeleteDependenciesButNoDependentRecords_RecordsDeleted()
 		{
@@ -114,5 +128,25 @@ namespace FluidDynamics.DynamicsCRMUtilities.Tests
 
 			mockOrganizationService.Verify();
 		}
+
+		private Mock<IExecuteMultipleResponseAdapter> GetExecuteMultipleResponseAdapter(IEnumerable<Guid> recordIds)
+		{
+			var firstBatchResponse = new Mock<IExecuteMultipleResponseAdapter>();
+			var responseCollection = new ExecuteMultipleResponseItemCollection();
+			responseCollection.AddRange(recordIds.Select(r => new ExecuteMultipleResponseItem()
+			{
+				Fault = null,
+				Response = new DeleteResponse()
+				{
+					ResponseName = "delete",
+					Results = new ParameterCollection { { "id", r } }
+				}
+			}));
+			firstBatchResponse
+				.Setup(e => e.Responses)
+				.Returns(responseCollection);
+			return firstBatchResponse;
+		}
+
 	}
 }

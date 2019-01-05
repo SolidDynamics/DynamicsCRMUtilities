@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Configuration;
 using System.Linq;
+using FluidDynamics.DynamicsCRMUtilities;
 using Microsoft.Xrm.Tooling.Connector;
 using Microsoft.Xrm.Sdk.Metadata;
 
@@ -17,6 +18,7 @@ namespace FluidDynamics
 		string EnvironmentName { get; }
 		List<Entity> RetrieveAllRecords(string fetchXML);
 		IEnumerable<OneToManyRelationshipMetadata> GetOneToManyRelationships(string entityName);
+		IExecuteMultipleResponseAdapter ExecuteMultipleReturnAdapter(ExecuteMultipleRequest executeMultipleRequest);
 	}
 
 	public class ExtendedOrganizationService : IExtendedOrganizationService
@@ -178,7 +180,7 @@ namespace FluidDynamics
 
 			Log.Debug(
 				$"Executing {request.RequestName} message on Dynamics...");
-			return _crmService.Execute(request);
+			return  _crmService.Execute(request);
 		}
 
 		/// <summary>
@@ -196,7 +198,7 @@ namespace FluidDynamics
 			{
 				var xml = string.Format(fetchXML, cookie);
 				var retrieveRequest = new RetrieveMultipleRequest() { Query = new FetchExpression(fetchXML) };
-				EntityCollection collection = ((RetrieveMultipleResponse)_crmService.Execute(retrieveRequest)).EntityCollection;
+				var collection = ((RetrieveMultipleResponse)_crmService.Execute(retrieveRequest)).EntityCollection;
 
 				if (collection.Entities.Count >= 0) entities.AddRange(collection.Entities);
 
@@ -211,16 +213,19 @@ namespace FluidDynamics
 
 		public IEnumerable<OneToManyRelationshipMetadata> GetOneToManyRelationships(string entityName)
 		{
-			List<RelationshipMetadataBase> relationshipMetadata = new List<RelationshipMetadataBase>();
-
 			var retrieveEntityRequest = new RetrieveEntityRequest
 			{
 				EntityFilters = EntityFilters.Relationships,
 				LogicalName = entityName
 			};
 
-			var entityrelationships = (RetrieveEntityResponse)_crmService.Execute(retrieveEntityRequest);
-			return entityrelationships.EntityMetadata.OneToManyRelationships;
+			var entityRelationships = (RetrieveEntityResponse)_crmService.Execute(retrieveEntityRequest);
+			return entityRelationships.EntityMetadata.OneToManyRelationships;
+		}
+
+		public IExecuteMultipleResponseAdapter ExecuteMultipleReturnAdapter(ExecuteMultipleRequest executeMultipleRequest)
+		{
+			return new ExecuteMultipleResponseAdapter((ExecuteMultipleResponse) Execute(executeMultipleRequest));
 		}
 	}
 }

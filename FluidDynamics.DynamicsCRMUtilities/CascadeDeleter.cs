@@ -1,16 +1,20 @@
-﻿using log4net;
+﻿using Humanizer;
+using log4net;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
-using Microsoft.Xrm.Sdk.Query;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FluidDynamics.DynamicsCRMUtilities;
 
 namespace FluidDynamics.CascadeDelete
 {
 	public class CascadeDeleter
 	{
+		private const string SUCCESSFUL_STRING = "Success";
+		private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
 		private readonly IExtendedOrganizationService _crmService;
 
 		public int BatchSize { get; set; } = 1000;
@@ -20,19 +24,34 @@ namespace FluidDynamics.CascadeDelete
 			_crmService = organizationService;
 		}
 
-		public void CascadeDeleteRecords(string entityName, IEnumerable<Guid> ids)
+		public IList<DeleteResult> CascadeDeleteRecords(string entityName, IEnumerable<Guid> ids)
 		{
+			log.Info($"Starting Cascade Delete for {entityName}...");
+			var deleteResults = new List<DeleteResult>();
+
 			var restrictDeleteDependencies = GetRestrictDeleteRelationships(entityName);
 
+			log.Info($"Entity {entityName} has " +
+				$"{"restrict delete dependency".ToQuantity(restrictDeleteDependencies.Count())}" +
+				$": ({string.Join(",", restrictDeleteDependencies.Select(r => r.DependentEntity))})");
+
 			var batches = ids.Batches(BatchSize);
+			int numberOfBatches = batches.Count();
+			log.Info($"{"record".ToQuantity(ids.Count())} divided into {"batch".ToQuantity(numberOfBatches)}");
+
+			int batchCount = 0;
 			foreach (var batch in batches)
 			{
+				batchCount++;
+				log.Info($"Processing batch {batchCount} of {numberOfBatches}");
+
 				if (restrictDeleteDependencies.Any())
 				{
 					foreach (var restrictDeleteDependency in restrictDeleteDependencies)
 					{
 						var dependentRecords = GetDependentRecords(restrictDeleteDependency, batch);
-						CascadeDeleteRecords(restrictDeleteDependency.DependentEntity, dependentRecords);
+						log.Info($"Found {"depdendent records".ToQuantity(dependentRecords.Count())} on entity {restrictDeleteDependency.DependentEntity} in this batch");
+						deleteResults.AddRange(CascadeDeleteRecords(restrictDeleteDependency.DependentEntity, dependentRecords));
 					}
 				}
 
@@ -40,15 +59,33 @@ namespace FluidDynamics.CascadeDelete
 				{
 					Requests = new OrganizationRequestCollection()
 				};
-				foreach(var id in batch)
+				foreach (var id in batch)
 				{
-					executeMultipleRequest.Requests.Add(new DeleteRequest() { Target = new EntityReference(entityName, id) });
+					executeMultipleRequest.Requests.Add(new DeleteRequest { Target = new EntityReference(entityName, id) });
 				}
 
-				_crmService.Execute(executeMultipleRequest);
-			}	
+				log.Info($"Executing requests for batch on entity {entityName}");
+				var deleteMultipleResponse = _crmService.ExecuteMultipleReturnAdapter(executeMultipleRequest);
+				var responses = GetDeleteResults(entityName, deleteMultipleResponse);
+
+				var responsesList = responses.ToList();
+				log.Info($"Batch completed with {"successes".ToQuantity(responsesList.Count(x => x.Result == SUCCESSFUL_STRING))} of {batch.Count()}");
+				deleteResults.AddRange(responsesList);
+			}
+
+			log.Info($"All batches completed for {entityName}...");
+			return deleteResults;
 		}
 
+		internal virtual IEnumerable<DeleteResult> GetDeleteResults(string entityName, IExecuteMultipleResponseAdapter deleteMultipleResponse)
+		{
+			return deleteMultipleResponse.Responses.Select(d => new DeleteResult()
+			{
+				EntityName = entityName,
+				RecordID = d.Response.Results["id"].ToString(),
+				Result = d.Fault == null ? SUCCESSFUL_STRING : d.Fault.Message
+			});
+		}
 
 		private IEnumerable<Guid> GetDependentRecords(RestrictDeleteDependency restrictDeleteDependency, IEnumerable<Guid> requiredRecordIds)
 		{
@@ -62,7 +99,7 @@ namespace FluidDynamics.CascadeDelete
 					</filter>
 				</entity>
 				</fetch>";
-			
+
 			return _crmService.RetrieveAllRecords(query).Select(e => e.Id);
 		}
 
@@ -77,7 +114,6 @@ namespace FluidDynamics.CascadeDelete
 				}
 			}
 		}
-
 	}
 
 	internal class RestrictDeleteDependency
@@ -87,6 +123,13 @@ namespace FluidDynamics.CascadeDelete
 		public string DependentEntity { get; set; }
 
 		public string DependentEntityLookupField { get; set; }
+	}
+
+	public class DeleteResult
+	{
+		public string EntityName { get; set; }
+		public string RecordID { get; set; }
+		public string Result { get; set; }
 	}
 
 	public static class HelperMethods
