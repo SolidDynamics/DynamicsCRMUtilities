@@ -50,7 +50,7 @@ namespace FluidDynamics.CascadeDelete
 					foreach (var restrictDeleteDependency in restrictDeleteDependencies)
 					{
 						var dependentRecords = GetDependentRecords(restrictDeleteDependency, batch);
-						log.Info($"Found {"depdendent records".ToQuantity(dependentRecords.Count())} on entity {restrictDeleteDependency.DependentEntity} in this batch");
+						log.Info($"Found {"dependent records".ToQuantity(dependentRecords.Count())} on entity {restrictDeleteDependency.DependentEntity} in this batch");
 						deleteResults.AddRange(CascadeDeleteRecords(restrictDeleteDependency.DependentEntity, dependentRecords));
 					}
 				}
