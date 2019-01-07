@@ -89,7 +89,7 @@ namespace FluidDynamics.CascadeDelete
 
 		private IEnumerable<Guid> GetDependentRecords(RestrictDeleteDependency restrictDeleteDependency, IEnumerable<Guid> requiredRecordIds)
 		{
-			var query = "<fetch {0}" +
+			var query = "<fetch {0}>" +
 				$@"<entity name='{restrictDeleteDependency.DependentEntity}'>
 					<attribute name='{restrictDeleteDependency.DependentEntity}id' />
 					<filter>
