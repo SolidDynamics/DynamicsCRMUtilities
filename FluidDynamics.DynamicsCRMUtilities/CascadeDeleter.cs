@@ -94,12 +94,13 @@ namespace FluidDynamics.CascadeDelete
 					<attribute name='{restrictDeleteDependency.DependentEntity}id' />
 					<filter>
 						<condition attribute='{restrictDeleteDependency.DependentEntityLookupField}' operator='in'>
-							{string.Join(string.Empty, requiredRecordIds.Select(id => $"<value>{id}</value")) }
+							{string.Join(string.Empty, requiredRecordIds.Select(id => $"<value>{id}</value>")) }
 						</condition>
 					</filter>
 				</entity>
 				</fetch>";
 
+			log.Debug($"Getting dependent records with query:\n{query}");
 			return _crmService.RetrieveAllRecords(query).Select(e => e.Id);
 		}
 
